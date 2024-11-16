@@ -1,6 +1,7 @@
 import '@src/Popup.css';
 import { useStorage, withErrorBoundary, withSuspense } from '@extension/shared';
 import { exampleThemeStorage } from '@extension/storage';
+import { useState } from 'react';
 import type { ComponentPropsWithoutRef } from 'react';
 
 const notificationOptions = {
@@ -14,26 +15,71 @@ const Popup = () => {
   const theme = useStorage(exampleThemeStorage);
   const isLight = theme === 'light';
   const logo = isLight ? 'popup/logo_vertical.svg' : 'popup/logo_vertical_dark.svg';
-  const goGithubSite = () =>
-    chrome.tabs.create({ url: '#' });
+
+  // State for input and output text
+  const [inputText, setInputText] = useState('');
+  const [summary, setSummary] = useState('');
+
+  const summarizeText = async (text: string) => {
+    try {
+      const canSummarize = await ai.summarizer.capabilities();
+      let summarizer;
+
+      if (canSummarize && canSummarize.available !== 'no') {
+        if (canSummarize.available === 'readily') {
+          // The summarizer can immediately be used.
+          summarizer = await ai.summarizer.create();
+        } else {
+          // The summarizer can be used after the model download.
+          summarizer = await ai.summarizer.create();
+          summarizer.addEventListener('downloadprogress', e => {
+            console.log(e.loaded, e.total);
+          });
+          await summarizer.ready;
+        }
+        console.log('Summarizer is available!');
+        const result = await summarizer.summarize(text);
+        return result;
+      } else {
+        throw new Error('Summarization API not available');
+      }
+      // Ensure chrome.summarization is available
+      // if (chrome.summarization) {
+      //   const result = await chrome.summarization.summarize({ text });
+      //   return result;
+      // } else {
+      //   throw new Error('Summarization API not available');
+      // }
+    } catch (error) {
+      console.error('Error summarizing text:', error);
+      return 'Error summarizing text.';
+    }
+  };
+
+  const goGithubSite = () => chrome.tabs.create({ url: '#' });
+
   const injectContentScript = async () => {
     const [tab] = await chrome.tabs.query({ currentWindow: true, active: true });
 
-    if (tab.url!.startsWith('about:') || tab.url!.startsWith('chrome:')) {
+    if (tab?.url?.startsWith('about:') || tab?.url?.startsWith('chrome:')) {
       chrome.notifications.create('inject-error', notificationOptions);
     }
 
-    await chrome.scripting
-      .executeScript({
-        target: { tabId: tab.id! },
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab?.id! },
         files: ['/content-runtime/index.iife.js'],
-      })
-      .catch(err => {
-        // Handling errors related to other paths
-        if (err.message.includes('Cannot access a chrome:// URL')) {
-          chrome.notifications.create('inject-error', notificationOptions);
-        }
       });
+    } catch (err) {
+      if (err.message.includes('Cannot access a chrome:// URL')) {
+        chrome.notifications.create('inject-error', notificationOptions);
+      }
+    }
+  };
+
+  const handleSummarizeClick = async () => {
+    const result = await summarizeText(inputText);
+    setSummary(result);
   };
 
   return (
@@ -42,6 +88,19 @@ const Popup = () => {
         <button onClick={goGithubSite}>
           <img src={chrome.runtime.getURL(logo)} className="App-logo" alt="logo" />
         </button>
+        <h1>Summarizer</h1>
+        <textarea
+          id="inputText"
+          rows={10}
+          cols={50}
+          placeholder="Enter text..."
+          value={inputText}
+          onChange={e => setInputText(e.target.value)}
+        />
+        <button id="summarizeBtn" onClick={handleSummarizeClick}>
+          Summarize
+        </button>
+        <p id="outputText">{summary}</p>
         <p>
           Edit <code>pages/popup/src/Popup.tsx</code>
         </p>
