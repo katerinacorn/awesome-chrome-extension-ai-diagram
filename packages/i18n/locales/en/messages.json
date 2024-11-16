@@ -1,11 +1,11 @@
 {
   "extensionDescription": {
     "description": "Extension description",
-    "message": "Chrome extension boilerplate developed with Vite, React and Typescript"
+    "message": "This is a Chrome extension that helps create diagrams based on text input using AI."
   },
   "extensionName": {
     "description": "Extension name",
-    "message": "Chrome extension boilerplate"
+    "message": "AI Diagrams from Text"
   },
   "toggleTheme": {
     "message": "Toggle theme"
